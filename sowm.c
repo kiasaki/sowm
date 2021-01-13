@@ -13,7 +13,7 @@
 #include "sowm.h"
 
 static client       *list = {0}, *ws_list[10] = {0}, *cur;
-static int          ws = 1, sw, sh, wx, wy, numlock = 0, monitors;
+static int          ws = 1, sw, sh, wx, wy, numlock = 0, running = 1, monitors;
 static unsigned int ww, wh;
 
 static Display      *d;
@@ -277,6 +277,10 @@ void ws_go(const Arg arg) {
     if (list) win_focus(list); else cur = 0;
 }
 
+void quit(const Arg arg) {
+  running = 0;
+}
+
 void configure_request(XEvent *e) {
     XConfigureRequestEvent *ev = &e->xconfigurerequest;
 
@@ -322,6 +326,7 @@ void run(const Arg arg) {
 
     setsid();
     execvp((char*)arg.com[0], (char**)arg.com);
+    exit(111);
 }
 
 void input_grab(Window root) {
@@ -369,6 +374,6 @@ int main(void) {
     XDefineCursor(d, root, XCreateFontCursor(d, 68));
     input_grab(root);
 
-    while (1 && !XNextEvent(d, &ev)) // 1 && will forever be here.
+    while (running && !XNextEvent(d, &ev)) // 1 && will forever be here.
         if (events[ev.type]) events[ev.type](&ev);
 }

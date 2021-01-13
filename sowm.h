@@ -57,5 +57,6 @@ void win_next(const Arg arg);
 void win_round_corners(Window w, int rad);
 void win_to_ws(const Arg arg);
 void ws_go(const Arg arg);
+void quit(const Arg arg);
 
 static int xerror() { return 0; }
