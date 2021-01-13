@@ -5,6 +5,7 @@
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
 #include <X11/extensions/shape.h>
+#include <X11/extensions/Xinerama.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
@@ -12,7 +13,7 @@
 #include "sowm.h"
 
 static client       *list = {0}, *ws_list[10] = {0}, *cur;
-static int          ws = 1, sw, sh, wx, wy, numlock = 0;
+static int          ws = 1, sw, sh, wx, wy, numlock = 0, monitors;
 static unsigned int ww, wh;
 
 static Display      *d;
@@ -32,6 +33,18 @@ static void (*events[LASTEvent])(XEvent *e) = {
 };
 
 #include "config.h"
+
+void win_half(const Arg arg) {
+   char m = arg.com[0][0];
+
+   win_size(cur->w, &wx, &wy, &ww, &wh);
+
+   XMoveResizeWindow(d, cur->w, \
+      (m == 'w' ? wx : m == 'e' ? (wx + ww / 2) : wx),
+      (m == 'n' ? wy : m == 's' ? (wy + wh / 2) : wy),
+      (m == 'w' ? (ww / 2) : m == 'e' ? (ww / 2) : ww),
+      (m == 'n' ? (wh / 2) : m == 's' ? (wh / 2) : wh));
+}
 
 void win_focus(client *c) {
     cur = c;
@@ -66,6 +79,8 @@ void notify_motion(XEvent *e) {
   
     if (mouse.button == 3)
         win_round_corners(mouse.subwindow, ROUND_CORNERS);
+
+    win_size(cur->w, &cur->wx, &cur->wx, &cur->ww, &cur->wh);
 }
 
 void key_press(XEvent *e) {
@@ -87,6 +102,28 @@ void button_press(XEvent *e) {
 
 void button_release(XEvent *e) {
     mouse.subwindow = 0;
+}
+
+int multimonitor_action (int action) { // action = 0 -> center; action = 1 -> fs
+    if (!XineramaIsActive(d)) return 1;
+    XineramaScreenInfo *si = XineramaQueryScreens(d, &monitors);
+    for (int i = 0; i < monitors; i++) {
+        if ((cur->wx + (cur->ww/2) >= (unsigned int)si[i].x_org
+                && cur->wx + (cur->ww/2) < (unsigned int)si[i].x_org + si[i].width)
+            && ( cur->wy + (cur->wh/2) >= (unsigned int)si[i].y_org
+                && cur->wy + (cur->wh/2) < (unsigned int)si[i].y_org + si[i].height)) {
+            if (action)
+                XMoveResizeWindow(d, cur->w,
+                                  si[i].x_org, si[i].y_org,
+                                  si[i].width, si[i].height);
+            else
+                XMoveWindow(d, cur->w,
+                            si[i].x_org + ((si[i].width - ww)/2),
+                            si[i].y_org + ((si[i].height -wh)/2));
+            break;
+        }
+    }
+    return 0;
 }
 
 void win_add(Window w) {
@@ -134,7 +171,11 @@ void win_center(const Arg arg) {
     if (!cur) return;
 
     win_size(cur->w, &(int){0}, &(int){0}, &ww, &wh);
-    XMoveWindow(d, cur->w, (sw - ww) / 2, (sh - wh) / 2);
+    if (multimonitor_action(0)) {
+        XMoveWindow(d, cur->w, (sw - ww) / 2, (sh - wh) / 2);
+    }
+
+    win_size(cur->w, &cur->wx, &cur->wy, &cur->ww, &cur->wh);
 }
 
 void win_fs(const Arg arg) {
@@ -142,7 +183,9 @@ void win_fs(const Arg arg) {
 
     if ((cur->f = cur->f ? 0 : 1)) {
         win_size(cur->w, &cur->wx, &cur->wy, &cur->ww, &cur->wh);
-        XMoveResizeWindow(d, cur->w, 0, 0, sw, sh);
+        if(multimonitor_action(1)) {
+          XMoveResizeWindow(d, cur->w, 0, 0, sw, sh);
+        }
 
     } else {
         XMoveResizeWindow(d, cur->w, cur->wx, cur->wy, cur->ww, cur->wh);
